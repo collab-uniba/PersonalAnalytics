@@ -6,7 +6,6 @@ using System;
 using System.IO;
 using System.Reflection;
 using System.Windows;
-using NetFwTypeLib;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using Shared;
@@ -28,7 +27,7 @@ namespace PersonalAnalytics
 
         //public App()
         [STAThread]
-        public static void Main()
+        public static void Main(string[] args)
         {
             // before actually starting up, check if there is already an instance running
             if (SingleInstance<App>.InitializeAsFirstInstance(UniqueAppName))
@@ -80,11 +79,6 @@ namespace PersonalAnalytics
         /// <param name="e"></param>
         protected override void OnStartup(StartupEventArgs e)
         {
-            //disable the FlowLight for this study
-#if Pilot_Manu_March17
-            FlowLight.Handler.GetInstance().FlowLightEnabled = false;
-#endif
-
             // Create log directory if it doesn't already exist
             var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "PersonalAnalytics");
             if (!Directory.Exists(path)) { Directory.CreateDirectory(path); }
@@ -108,33 +102,24 @@ namespace PersonalAnalytics
             // add a firewall exception
             //AddFirewallException(); // disabled because it causes problems if not system admin
 
+            //////////////////////////////////////////////////////
+            // initialize task bar icon & context menu
+            //////////////////////////////////////////////////////
+            TrackerManager.GetInstance().InitializeTaskBarIcon();
 
             //////////////////////////////////////////////////////
             // Start Tracker Manager (i.e. the monitoring tool)
             //////////////////////////////////////////////////////
             var trackers = TrackerManager.GetInstance().RegisterTrackers();
             TrackerManager.GetInstance().SetAppVersion(GetPublishedAppVersion());
-            FlowLight.Handler.GetInstance().SetTrackers(trackers);
             TrackerManager.GetInstance().Start();
-
-
-            //////////////////////////////////////////////////////
-            // initialize task bar icon & context menu
-            //////////////////////////////////////////////////////
-            TrackerManager.GetInstance().InitializeTaskBarIcon();
-
 
             //////////////////////////////////////////////////////
             // Start the Retrospection
             //////////////////////////////////////////////////////
-            Retrospection.Handler.GetInstance().Start(trackers, GetPublishedAppVersion()); // register the same trackers from the monitoring tool for the retrospection
-
-            //////////////////////////////////////////////////////
-            // Start the FlowLight
-            //////////////////////////////////////////////////////
-            if (FlowLight.Handler.GetInstance().FlowLightEnabled)
+            if (Retrospection.Settings.IsEnabled)
             {
-                FlowLight.Handler.GetInstance().Start();
+                Retrospection.Handler.GetInstance().Start(trackers, GetPublishedAppVersion()); // register the same trackers from the monitoring tool for the retrospection
             }
         }
 

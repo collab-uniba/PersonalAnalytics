@@ -39,9 +39,6 @@ namespace PersonalAnalytics
         private string _publishedAppVersion;
         private bool _isPaused;
 
-        private MenuItem _flowLightEnforceMenuItem;
-        private MenuItem _flowLightResetMenuItem;
-
         #region Initialize & Handle TrackerManager
 
         /// <summary>
@@ -55,21 +52,17 @@ namespace PersonalAnalytics
 
         /// <summary>
         /// Register trackers for the TrackerManager (i.e. monitoring tool)
-        /// (add a new tracker here to make it being integrated into the monitoring tool
-        /// and retrospection)
+        /// (add a new tracker here to make it being integrated into the monitoring tool and retrospection)
         /// </summary>
         public List<ITracker> RegisterTrackers()
         {
             Register(new WindowsActivityTracker.Daemon());
             Register(new TimeSpentVisualizer.Visualizers.TimeSpentVisualizer());
             Register(new UserEfficiencyTracker.Daemon());
-            Register(new UserInterruptibilityTracker.Daemon());
             Register(new UserInputTracker.Daemon());
             Register(new MsOfficeTracker.Daemon());
             Register(new PolarTracker.Deamon());
             Register(new FitbitTracker.Deamon());
-            Register(new FlowTracker.Daemon());
-
 
 #if Dev
             //Register(new PeopleVisualizer.PeopleVisualizer()); // disabled, as it's not finished and pretty slow
@@ -80,7 +73,7 @@ namespace PersonalAnalytics
             
 #endif
 
-            return _trackers; // return trackers for retrospection
+            return _trackers;
         }
 
         /// <summary>
@@ -89,8 +82,6 @@ namespace PersonalAnalytics
         /// </summary>
         public void Start()
         {
-            //GetDllVersions();
-
             // show unified first start screens
             ShowFirstStartScreens();
 
@@ -100,18 +91,10 @@ namespace PersonalAnalytics
                 // if tracker is disabled - don't start it
                 if (!tracker.IsEnabled()) continue;
 
-                // if flowlight is disabled - don't start the flowtracker (TODO: remove!)
-                if ((tracker is FlowTracker.Daemon) && !FlowLight.Handler.GetInstance().FlowLightEnabled) continue;
-
                 // else: create tables & start tracker
                 tracker.CreateDatabaseTablesIfNotExist();
                 tracker.Start();
             }
-
-            // register FlowLight Events
-            FlowLight.Handler.GetInstance().EnforcingCancelled += TrackerManager_EnforcingCancelled;
-            FlowLight.Handler.GetInstance().FlowLightStarted += TrackerManager_FlowLightStarted;
-            FlowLight.Handler.GetInstance().FLowLightStopped += TrackerManager_FLowLightStopped;
 
             // run database updates for trackers
             PerformDatabaseUpdatesIfNecessary();
@@ -120,6 +103,7 @@ namespace PersonalAnalytics
             var trackersString = string.Join(", ", _trackers.Where(t => t.IsRunning).ToList().ConvertAll(t => t.Name + " (" + t.GetVersion() + ")").ToArray());
             Database.GetInstance().LogInfo(string.Format(CultureInfo.InvariantCulture, "TrackerManager (V{0}) started with {1} trackers: {2}.", _publishedAppVersion, _trackers.Where(t => t.IsRunning).ToList().Count, trackersString));
             SetTaskbarIconTooltip("Tracker started");
+            Application.Current.Dispatcher.Invoke(() => TaskbarIcon.ShowBalloonTip(Dict.ToolName, Dict.ToolName + " is running with " + _trackers.Where(t => t.IsRunning).ToList().Count + " data trackers.", BalloonIcon.Info));
 
             // Initialize & start the timer to update the taskbaricon toolitp
             _taskbarIconTimer = new DispatcherTimer();
@@ -148,39 +132,17 @@ namespace PersonalAnalytics
             SystemEvents.TimeChanged += SaveCurrentTimeZone;
         }
 
-        private void TrackerManager_EnforcingCancelled(object sender, EventArgs e)
-        {
-            RemoveResetMenuItem();
-        }
-
-        private void TrackerManager_FLowLightStopped(object sender, EventArgs e)
-        {
-            RemoveFlowLightMenuItem();
-        }
-
-        private void TrackerManager_FlowLightStarted(object sender, EventArgs e)
-        {
-            InsertFlowLightMenuItem();
-        }
-
         /// <summary>
         /// show unified first start screens for tool and each tracker (where necessary)
         /// </summary>
         private void ShowFirstStartScreens()
         {
-            var startScreens = new List<FirstStartScreenContainer>();
+            var startScreens = new List<IFirstStartScreen>();
 
             // add first start screen for tool if not yet shown
             if (!Database.GetInstance().HasSetting("FirstStartWindowShown"))
             {
-                var window = new FirstStartWindow();
-                startScreens.Add(new FirstStartScreenContainer(new FirstStartWindow(), "Personal Analytics: First Start", FirstStartWindow.NextClicked));
-            }
-
-            // add first start screen for flowlight
-            if (FlowLight.Handler.GetInstance().FlowLightEnabled && FlowLight.Handler.GetInstance().IsFlowLightsFirstUse())
-            {
-                startScreens.Add(FlowLight.Handler.GetInstance().GetStartScreen());
+                startScreens.Add(new FirstStartWindow());
             }
 
             // add first start screen of each tracker where not yet shown
@@ -279,15 +241,12 @@ namespace PersonalAnalytics
             // shutdown the visualization server
             Retrospection.Handler.GetInstance().Stop();
 
-            // stop the FlowLight
-            FlowLight.Handler.GetInstance().Stop();
-
             // stop timers & unregister
             if (_taskbarIconTimer != null) _taskbarIconTimer.Stop();
             if (_remindToContinueTrackerTimer != null) _remindToContinueTrackerTimer.Stop();
             if (_checkForUpdatesTimer != null) _checkForUpdatesTimer.Stop();
-            TaskbarIcon.TrayBalloonTipClicked -= TrayBallonTipClicked;
-            TaskbarIcon.TrayMouseDoubleClick -= (o, i) => OpenRetrospection();
+            TaskbarIcon.TrayBalloonTipClicked -= TrayBalloonTipClicked;
+            TaskbarIcon.TrayMouseDoubleClick -= (o, i) => TrayMouseDoubleClicked();
             SystemEvents.TimeChanged -= SaveCurrentTimeZone;
 
             // sometimes the icon doesn't go away unless we manually dispose it
@@ -314,7 +273,6 @@ namespace PersonalAnalytics
             {
                 tracker.Stop();
             }
-            FlowLight.Handler.GetInstance().Pause();
             _isPaused = true;
 
             if (_remindToContinueTrackerTimer == null)
@@ -323,8 +281,11 @@ namespace PersonalAnalytics
                 _remindToContinueTrackerTimer.Interval = Settings.RemindToResumeToolInterval;
                 _remindToContinueTrackerTimer.Tick += ((s, e) =>
                 {
-                    // show the popup (already registered for the click event)
-                    TaskbarIcon.ShowBalloonTip("Reminder", "PersonalAnalytics is still paused. Click here to resume it.", BalloonIcon.Warning); //TODO: bug #91: it doesn't show up on Windows 10
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        // show the popup (already registered for the click event)
+                        TaskbarIcon.ShowBalloonTip("Reminder", "PersonalAnalytics is still paused. Click here to resume it.", BalloonIcon.Warning);
+                    });
                 });
             }
             _remindToContinueTrackerTimer.IsEnabled = true;
@@ -351,7 +312,6 @@ namespace PersonalAnalytics
                 if (!tracker.IsEnabled()) continue;
                 tracker.Start();
             }
-            FlowLight.Handler.GetInstance().Continue();
             _isPaused = false;
 
             Database.GetInstance().LogInfo("The participant resumed the trackers.");
@@ -379,7 +339,7 @@ namespace PersonalAnalytics
             return _trackers;
         }
 
-#endregion
+        #endregion
 
         #region Taskbar Icon Options
 
@@ -391,8 +351,8 @@ namespace PersonalAnalytics
             TaskbarIcon = new TaskbarIcon();
             TaskbarIcon.Icon = new Icon("Assets/icon.ico");
             TaskbarIcon.ToolTipText = "PersonalAnalytics starting up...";
-            TaskbarIcon.TrayMouseDoubleClick += (o, i) => OpenRetrospection();
-            TaskbarIcon.TrayBalloonTipClicked += TrayBallonTipClicked;
+            TaskbarIcon.TrayMouseDoubleClick += (o, i) => TrayMouseDoubleClicked();
+            TaskbarIcon.TrayBalloonTipClicked += TrayBalloonTipClicked;
             SetContextMenuOptions();
         }
 
@@ -402,9 +362,20 @@ namespace PersonalAnalytics
         /// </summary>
         /// <param name="s"></param>
         /// <param name="e"></param>
-        private void TrayBallonTipClicked(object s, RoutedEventArgs e)
+        private void TrayBalloonTipClicked(object s, RoutedEventArgs e)
         {
-            PauseContinueTracker(_pauseContinueMenuItem);
+            // if tracker is currently paused, the user probably wants to continue the tracking
+            if (_isPaused) PauseContinueTracker(_pauseContinueMenuItem);
+        }
+
+        /// <summary>
+        /// Called when the user double clicks the system tray icon
+        /// Open the retrospection if it is enabled
+        /// </summary>
+        private void TrayMouseDoubleClicked()
+        {
+            if (Retrospection.Settings.IsEnabled) OpenRetrospection();
+            // else: do nothing
         }
 
         /// <summary>
@@ -412,50 +383,45 @@ namespace PersonalAnalytics
         /// </summary>
         private void SetContextMenuOptions()
         {
-            var cm = new System.Windows.Controls.ContextMenu();
+            var cm = new ContextMenu();
             TaskbarIcon.MenuActivation = PopupActivationMode.RightClick;
             TaskbarIcon.ContextMenu = cm;
 
             if (Settings.IsUploadEnabled)
             {
-                var m8 = new System.Windows.Controls.MenuItem { Header = "Upload collected data" };
+                var m8 = new MenuItem { Header = "Upload collected data" };
                 m8.Click += (o, i) => UploadTrackedData();
                 TaskbarIcon.ContextMenu.Items.Add(m8);
             }
 
-            var m4 = new System.Windows.Controls.MenuItem { Header = "Open collected data" };
+            var m4 = new MenuItem { Header = "Open collected data" };
             m4.Click += (o, i) => OpenDataExportDirectory();
             TaskbarIcon.ContextMenu.Items.Add(m4);
 
-            var m2 = new System.Windows.Controls.MenuItem { Header = "Answer pop-up now" };
+            var m2 = new MenuItem { Header = "Answer pop-up now" };
             m2.Click += (o, i) => ManuallyStartUserSurvey();
             if (_settings.IsUserEfficiencyTrackerEnabled()) TaskbarIcon.ContextMenu.Items.Add(m2);
 
-            var m1 = new System.Windows.Controls.MenuItem { Header = "Show Retrospection" };
+            var m1 = new MenuItem { Header = "Show Retrospection" };
             m1.Click += (o, i) => Retrospection.Handler.GetInstance().OpenRetrospection();
-            TaskbarIcon.ContextMenu.Items.Add(m1);
+            if (Retrospection.Settings.IsEnabled) TaskbarIcon.ContextMenu.Items.Add(m1);
 
 #if DEBUG
-            var m5 = new System.Windows.Controls.MenuItem { Header = "Show Retrospection (in browser)" };
+            var m5 = new MenuItem { Header = "Show Retrospection (in browser)" };
             m5.Click += (o, i) => Retrospection.Handler.GetInstance().OpenRetrospectionInBrowser();
-            TaskbarIcon.ContextMenu.Items.Add(m5);
+            if (Retrospection.Settings.IsEnabled) TaskbarIcon.ContextMenu.Items.Add(m5);
 #endif
 
-            if (FlowLight.Handler.GetInstance().FlowLightEnabled)
-            {
-                InsertFlowLightMenuItem();
-            }
-
-            var m6 = new System.Windows.Controls.MenuItem { Header = "Settings" };
+            var m6 = new MenuItem { Header = "Settings" };
             m6.Click += (o, i) => OpenSettings();
             TaskbarIcon.ContextMenu.Items.Add(m6);
 
-            var m3 = new System.Windows.Controls.MenuItem { Header = "Pause Tracker" };
+            var m3 = new MenuItem { Header = "Pause " + Dict.ToolName };
             m3.Click += (o, i) => PauseContinueTracker(m3);
             TaskbarIcon.ContextMenu.Items.Add(m3);
             _pauseContinueMenuItem = m3;
 
-            var m7 = new System.Windows.Controls.MenuItem { Header = "Shutdown Tracker" };
+            var m7 = new MenuItem { Header = "Shutdown " + Dict.ToolName };
             m7.Click += (o, i) => Stop(true);
             TaskbarIcon.ContextMenu.Items.Add(m7);
 
@@ -471,128 +437,30 @@ namespace PersonalAnalytics
         }
 
         /// <summary>
-        /// add FlowLight menu items to keep the light in a certain state for the specified time
-        /// </summary>
-        private void InsertFlowLightMenuItem()
-        {
-            if (!TaskbarIcon.ContextMenu.Items.Contains(_flowLightEnforceMenuItem))
-            {
-                if (_flowLightEnforceMenuItem == null)
-                {
-                    _flowLightEnforceMenuItem = new System.Windows.Controls.MenuItem { Header = "Switch FlowLight Status to" };
-                    var mIFree = new System.Windows.Controls.MenuItem { Header = "Free" };
-                    mIFree.Items.Add(InitFlowLightSubMenuItem(FlowLight.Handler.EnforceStatus.Free, 30));
-                    mIFree.Items.Add(InitFlowLightSubMenuItem(FlowLight.Handler.EnforceStatus.Free, 60));
-                    mIFree.Items.Add(InitFlowLightSubMenuItem(FlowLight.Handler.EnforceStatus.Free, 90));
-                    _flowLightEnforceMenuItem.Items.Add(mIFree);
-
-                    var mIBusy = new System.Windows.Controls.MenuItem { Header = "Busy" };
-                    mIBusy.Items.Add(InitFlowLightSubMenuItem(FlowLight.Handler.EnforceStatus.Busy, 30));
-                    mIBusy.Items.Add(InitFlowLightSubMenuItem(FlowLight.Handler.EnforceStatus.Busy, 60));
-                    mIBusy.Items.Add(InitFlowLightSubMenuItem(FlowLight.Handler.EnforceStatus.Busy, 90));
-                    _flowLightEnforceMenuItem.Items.Add(mIBusy);
-
-                    var mIDnD = new System.Windows.Controls.MenuItem { Header = "Do not Disturb" };
-                    mIDnD.Items.Add(InitFlowLightSubMenuItem(FlowLight.Handler.EnforceStatus.DnD, 30));
-                    mIDnD.Items.Add(InitFlowLightSubMenuItem(FlowLight.Handler.EnforceStatus.DnD, 60));
-                    mIDnD.Items.Add(InitFlowLightSubMenuItem(FlowLight.Handler.EnforceStatus.DnD, 90));
-                    _flowLightEnforceMenuItem.Items.Add(mIDnD);
-                }
-
-                TaskbarIcon.ContextMenu.Items.Add(_flowLightEnforceMenuItem);
-            }
-            
-        }
-
-        /// <summary>
-        /// remove the FlowLight menu item
-        /// </summary>
-        private void RemoveFlowLightMenuItem()
-        {
-            if (TaskbarIcon.ContextMenu.Items.Contains(_flowLightEnforceMenuItem))
-            {
-                TaskbarIcon.ContextMenu.Items.Remove(_flowLightEnforceMenuItem);
-            }          
-        }
-
-        /// <summary>
-        /// creates a sub-sub-MenuItem to enforce the FlowLight state for a certain amount of minutes
-        /// </summary>
-        /// <param name="status"></param>
-        /// <param name="minutes"></param>
-        /// <returns></returns>
-        private System.Windows.Controls.MenuItem InitFlowLightSubMenuItem(FlowLight.Handler.EnforceStatus status, int minutes)
-        {
-            var menuItem = new System.Windows.Controls.MenuItem { Header = minutes + " min" };
-            menuItem.Click += (o, i) => FlowLight.Handler.GetInstance().EnforcingClicked(status, minutes);
-            menuItem.Click += FlowLightEnforcingClicked;
-
-            return menuItem;
-        }
-
-        /// <summary>
-        /// adds a Reset MenuItem if the FlowLight MenuItem to enforce the state has been clicked
-        /// </summary>
-        /// <param name="sender"></param>
-        /// <param name="e"></param>
-        private void FlowLightEnforcingClicked(object sender, RoutedEventArgs e)
-        {
-            if (FlowLight.Handler.GetInstance().FlowLightEnabled && FlowLight.Handler.GetInstance().IsRunning)
-            {
-                //only add the reset button if there is no one there yet!
-                if (_flowLightEnforceMenuItem != null && _flowLightEnforceMenuItem.Items.Count == 3)
-                {
-                    _flowLightResetMenuItem = new System.Windows.Controls.MenuItem { Header = "Reset" };
-                    _flowLightResetMenuItem.Click += (o, i) => FlowLight.Handler.GetInstance().ResetEnforcingClicked();
-                    _flowLightResetMenuItem.Click += ResetMenuItem_Click;
-                    _flowLightEnforceMenuItem.Items.Add(_flowLightResetMenuItem);
-                }
-            }
-        }
-
-        /// <summary>
-        /// Removes the reset button for the FlowLight enforcing, after it has been clicked
-        /// </summary>
-        /// <param name="sender"></param>
-        /// <param name="e"></param>
-        private void ResetMenuItem_Click(object sender, RoutedEventArgs e)
-        {
-            RemoveResetMenuItem();
-        }
-        
-        private void RemoveResetMenuItem()
-        {   
-            if (_flowLightEnforceMenuItem != null && _flowLightResetMenuItem != null && _flowLightEnforceMenuItem.Items.Contains(_flowLightResetMenuItem))
-            {
-                Application.Current.Dispatcher.Invoke(new Action(() => _flowLightEnforceMenuItem.Items.Remove(_flowLightResetMenuItem)));
-            }        
-        }
-
-        /// <summary>
         /// depending on the variable _isPaused, the tracker is
         /// paused or continued
         /// </summary>
         /// <param name="item"></param>
-        private void PauseContinueTracker(System.Windows.Controls.MenuItem item)
+        private void PauseContinueTracker(MenuItem item)
         {
             // continue
             if (_isPaused)
             {
                 Continue();
-                item.Header = "Pause Tracker";
+                item.Header = "Pause " + Dict.ToolName;
             }
             // pause 
             else
             {
                 Pause();
-                item.Header = "Resume Tracker";
+                item.Header = "Resume " + Dict.ToolName;
             }
         }
 
         /// <summary>
         /// Opens the UI specified for the current retrospection
         /// </summary>
-        private void OpenRetrospection()
+        private static void OpenRetrospection()
         {
             Retrospection.Handler.GetInstance().OpenRetrospection();
         }
@@ -603,7 +471,7 @@ namespace PersonalAnalytics
         private static void OpenDataExportDirectory()
         {
             var path = Settings.ExportFilePath;
-            System.Diagnostics.Process.Start(path);
+            Process.Start(path);
         }
 
         /// <summary>
@@ -667,8 +535,9 @@ namespace PersonalAnalytics
         private void UpdateTooltipIcon(object sender, EventArgs e)
         {
             // Update Taskbar Icon Tooltip
-            var text = _trackers.Aggregate(String.Empty, (current, tracker) => current + (tracker.GetStatus() + "\n"));
-            text += "Version: " + _publishedAppVersion;
+            var text = _trackers.Where(t => t.IsRunning).Aggregate(string.Empty, (current, tracker) => current + (tracker.GetStatus() + "\n"));
+            text += "\n" + _trackers.Where(t => !t.IsRunning).Aggregate(string.Empty, (current, tracker) => current + (tracker.GetStatus() + "\n"));
+            text += "\nVersion: " + _publishedAppVersion;
             SetTaskbarIconTooltip(text);
 
             // Update database file (if necessary)
@@ -693,7 +562,7 @@ namespace PersonalAnalytics
             TaskbarIcon.ToolTipText = message;
         }
 
-        #endregion
+#endregion
 
         #region Helpers
 
@@ -770,7 +639,6 @@ namespace PersonalAnalytics
             try
             {
                 info = ad.CheckForDetailedUpdate();
-
             }
             catch (DeploymentDownloadException dde)
             {
@@ -839,10 +707,11 @@ namespace PersonalAnalytics
 
                         // the only way the restart with a click once work and IsNetworkDeployed is not false after the restart is
                         // the following (according to this: http://blachniet.com/blog/how-not-to-restart-a-clickonce-application/)
+                        // and https://robrelyea.wordpress.com/2007/07/24/application-restart-for-wpf/
 
                         Stop(false); // stop the application (restart stuff below)
-                        System.Windows.Forms.Application.Restart(); // other way might be: Process.Start(App.AppPath);
-                        ShutdownApplication();
+                        System.Windows.Forms.Application.Restart();
+                        Application.Current.Shutdown();
                     }
                     catch (DeploymentDownloadException dde)
                     {
