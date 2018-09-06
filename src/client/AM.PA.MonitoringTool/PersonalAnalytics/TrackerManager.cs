@@ -63,7 +63,9 @@ namespace PersonalAnalytics
             Register(new MsOfficeTracker.Daemon());
             Register(new PolarTracker.Deamon());
             Register(new FitbitTracker.Deamon());
-
+#if Pilot_Raphael_Sept18
+            Register(new TobiiEyeTracker.Deamon());
+#endif
 #if Dev
             //Register(new PeopleVisualizer.PeopleVisualizer()); // disabled, as it's not finished and pretty slow
             //Register(new WindowsContextTracker.Daemon();); // implementation not finished
@@ -403,7 +405,7 @@ namespace PersonalAnalytics
             if (_settings.IsUserEfficiencyTrackerEnabled()) TaskbarIcon.ContextMenu.Items.Add(m2);
 
             var m1 = new MenuItem { Header = "Show Retrospection" };
-            m1.Click += (o, i) => Retrospection.Handler.GetInstance().OpenRetrospection();
+            m1.Click += (o, i) => OpenRetrospection();
             if (Retrospection.Settings.IsEnabled) TaskbarIcon.ContextMenu.Items.Add(m1);
 
 #if DEBUG
