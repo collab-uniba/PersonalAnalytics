@@ -26,6 +26,9 @@ class EmotionPopUpWindowController: NSWindowController {
     @IBOutlet weak var valenceValidationLabel: NSTextField!
     @IBOutlet weak var arousalValidationLabel: NSTextField!
 
+    // Other variables
+    var firstTimeClick: Bool = true
+
 
     //------------------------------------------------------
 
@@ -65,11 +68,17 @@ class EmotionPopUpWindowController: NSWindowController {
     }
 
     // Repeat button
-    @IBAction func repeatButtonClicked(_ sender: Any) {
+    @IBAction func repeatButtonClicked(_ sender: NSButton) {
 
         if let valenceValue = self.valence?.identifier?.rawValue,
             let arousalValue = self.arousal?.identifier?.rawValue,
             let activityValue = self.activityPopupButton.titleOfSelectedItem {
+
+            if self.firstTimeClick == true {
+                sender.title = NSLocalizedString("I have pushed the marker button!", tableName: "EmotionPopUp", comment: "Before continuing, recalls the user to push the marker button on the Empatica E4.")
+                self.firstTimeClick = false
+                return
+            }
 
             let timestamp = NSDate()
             let activity = activityValue
@@ -88,6 +97,9 @@ class EmotionPopUpWindowController: NSWindowController {
 
             // Close the window
             self.close()
+
+            sender.title = NSLocalizedString("Oyu-tk-Vba.title", tableName: "EmotionPopUp", comment: "Original button title")
+            self.firstTimeClick = true
         } else {
 
             // If the user didn't choose an option for the the activity...
@@ -122,7 +134,7 @@ class EmotionPopUpWindowController: NSWindowController {
         //Open SavePanel
         let savePanel = NSSavePanel()
         savePanel.title = "Export data to csv"
-        savePanel.message = NSLocalizedString("Insert a name", tableName: "MainMenu", comment:"How to call the output file when exporting to .csv")
+        savePanel.message = NSLocalizedString("Insert a name", tableName: "EmotionPopUp", comment:"How to call the output file when exporting to .csv")
 
         if (savePanel.runModal() == NSApplication.ModalResponse.OK) {
             let result = savePanel.url
