@@ -70,7 +70,7 @@ class EmotionPopUpWindowController: NSWindowController {
     }
 
     // Repeat button (now "Done" button)
-    @IBAction func repeatButtonClicked(_ sender: Any) {
+    @IBAction func repeatButtonClicked(_ sender: NSButton) {
 
         if let valenceValue = self.valence?.identifier?.rawValue,
             let arousalValue = self.arousal?.identifier?.rawValue,
