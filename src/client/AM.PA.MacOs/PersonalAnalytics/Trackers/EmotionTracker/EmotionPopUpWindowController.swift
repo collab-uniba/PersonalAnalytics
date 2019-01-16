@@ -2,7 +2,7 @@
 //  EmotionPopUpWindowController.swift
 //  PersonalAnalytics
 //
-//  Created by Luigi Quaranta on 03/01/2019.
+//  Created by Luigi Quaranta on 2019-01-03.
 //
 
 import Cocoa
@@ -12,9 +12,7 @@ import CoreData
 class EmotionPopUpWindowController: NSWindowController {
 
     // MARK: Properties
-
-    // EmotionTracker instance
-    var emotionTracker = EmotionTracker()
+    var emotionTrackerHelpers = EmotionTrackerHelpers()
 
     // Buttons
     var valence: NSButton? = nil
@@ -28,9 +26,6 @@ class EmotionPopUpWindowController: NSWindowController {
 
     // Other variables
     var firstTimeClick: Bool = true
-
-
-    //------------------------------------------------------
 
 
     // MARK: Utility functions
@@ -49,13 +44,20 @@ class EmotionPopUpWindowController: NSWindowController {
 
     }
 
+    @objc func showEmotionPopUp(_ sender: AnyObject) {
+        DataObjectController.sharedInstance.saveContext()
+        self.showWindow(nil)
+        NSApp.activate(ignoringOtherApps: true)
+
+        self.window?.makeKeyAndOrderFront(self)
+    }
+
     // MARK: Lifecycle events
     override func windowDidLoad() {
         super.windowDidLoad()
         resetForm()
     }
 
-    //------------------------------------------------------
 
     // MARK: UI behaviour
 
@@ -67,8 +69,8 @@ class EmotionPopUpWindowController: NSWindowController {
         self.arousal = sender
     }
 
-    // Repeat button
-    @IBAction func repeatButtonClicked(_ sender: NSButton) {
+    // Repeat button (now "Done" button)
+    @IBAction func repeatButtonClicked(_ sender: Any) {
 
         if let valenceValue = self.valence?.identifier?.rawValue,
             let arousalValue = self.arousal?.identifier?.rawValue,
@@ -87,12 +89,13 @@ class EmotionPopUpWindowController: NSWindowController {
 
             let questionnaire = Questionnaire(timestamp: timestamp, activity: activity, valence: valence, arousal: arousal)
 
-            emotionTracker.storeQuestionnaire(questionnaire: questionnaire)
+            emotionTrackerHelpers.storeQuestionnaire(questionnaire: questionnaire)
 
             // Reset button state
             resetForm()
 
             // Request a new notification
+            let emotionTracker = TrackerManager.shared.getTracker(tracker: "EmotionTracker") as! EmotionTracker
             emotionTracker.scheduleNotification()
 
             // Close the window
@@ -125,7 +128,6 @@ class EmotionPopUpWindowController: NSWindowController {
 
         }
 
-
     }
 
 
@@ -140,7 +142,7 @@ class EmotionPopUpWindowController: NSWindowController {
             let result = savePanel.url
             if (result != nil) {
                 print("Saving to: ", result!.path)
-                emotionTracker.exportToCsv(destinationPath: result!)
+                emotionTrackerHelpers.exportToCsv(destinationPath: result!)
                 print("Saved.")
             } else {
                 return // User clicked cancel

@@ -2,7 +2,7 @@
 //  EmotionTracker.swift
 //  PersonalAnalytics
 //
-//  Created by Luigi Quaranta on 02/01/2019.
+//  Created by Luigi Quaranta on 2019-01-02.
 //
 
 import Cocoa
@@ -16,143 +16,113 @@ struct Questionnaire {
     var arousal: NSNumber
 }
 
-class EmotionTracker {
+class EmotionTracker: ITracker {
 
     // MARK: Properties
-    var context: NSManagedObjectContext?
+    let emotionPopUpController = EmotionPopUpWindowController(windowNibName: NSNib.Name(rawValue: "EmotionPopUp"))
+    let notificationCenter = NSUserNotificationCenter.default
+    var notificationSet = Set<NSUserNotification>()
 
-    // MARK: Class initializer
+    // Properties for protocol conformity
+    var name: String = "EmotionTracker"
+    var isRunning: Bool = false
+
+
+    // MARK: Initializer
     init() {
-
-        // CoreData initialization
-
-        // Initialize a Persistent Container
-        let container = NSPersistentContainer(name: "PersonalAnalytics")
-        container.loadPersistentStores(completionHandler: { (description, error) in
-            if let error = error {
-                fatalError("Unable to load persistent stores: \(error)")
-            }
-        })
-
-        // Get an NSManagedObjectContext
-        self.context = container.newBackgroundContext()
-
-        // Set default settings
-        // Default time interval between notificaitons
-        var minutes = 60
-        minutes *= 60
+        
+        // Set default time interval between notificaitons
+        var minutes = 5 // Should be 60 by default
+        minutes *= 1 // Should be 60
         UserDefaults.standard.set(minutes, forKey: "timeInterval")
 
+        // Start the tracker
+        start()
     }
 
-    // MARK: Persistence utilities
-    func storeQuestionnaire(questionnaire: Questionnaire) {
 
-        let emotionalState = NSEntityDescription.insertNewObject(forEntityName: "EmotionalState", into: self.context!) as! EmotionalState
+    // MARK: ITracker Protocol Conformity Functions
+    func start() {
+        // Schedule first notification
+        scheduleNotification()
+        isRunning = true
+    }
 
-        emotionalState.timestamp = questionnaire.timestamp
-        emotionalState.activity = questionnaire.activity
-        emotionalState.valence = questionnaire.valence
-        emotionalState.arousal = questionnaire.arousal
-
-        do {
-            try self.context?.save()
-        } catch let error {
-            print("It was not possible to save the last emotional state.")
-            print("ERROR DETAILS: \(error)")
+    func stop() {
+        // Cancel scheduled notification
+        for notification in notificationSet {
+            notificationCenter.removeScheduledNotification(notification)
         }
-
-        print("Emotional state saved:")
-        print(emotionalState)
-
+        isRunning = false
     }
 
-    // MARK: Notification scheduling
+    // Not yet implemented
+    func createDatabaseTablesIfNotExist() {}
+    func updateDatabaseTables(version: Int) {}
+
+
+    // MARK: Notification scheduling and management
     func scheduleNotification(minutesSinceNow: Int? = nil) {
 
         let notification = NSUserNotification()
-        let notificationCenter = NSUserNotificationCenter.default
-        let timeIntervalSinceNow: Int = (minutesSinceNow ?? (UserDefaults.standard.value(forKey: "timeInterval") as! Int))
 
-        notification.title = "What are you feeling?"
-        notification.subtitle = "REMEMBER: push the button on your smartband!"
+        // Notification properties
+        notification.identifier = String(NSDate().timeIntervalSince1970)
+        notification.title = "How are you feeling?"
+        notification.subtitle = "Click here to open the pop-up!"
         notification.soundName = NSUserNotificationDefaultSoundName
+        let timeIntervalSinceNow: Int = (minutesSinceNow ?? (UserDefaults.standard.value(forKey: "timeInterval") as! Int))
         notification.deliveryDate = Date(timeIntervalSinceNow: TimeInterval(exactly: timeIntervalSinceNow)!)
 
+        // Notification buttons
         notification.hasActionButton = true
         notification.otherButtonTitle = "Dismiss"
         notification.actionButtonTitle = "Postpone"
         var actions = [NSUserNotificationAction]()
-        let action1 = NSUserNotificationAction(identifier: "5m", title: "5 minutes")
-        let action2 = NSUserNotificationAction(identifier: "30m", title: "30 minutes")
-        let action3 = NSUserNotificationAction(identifier: "1h", title: "1 hour")
+        let action1 = NSUserNotificationAction(identifier: "1h", title: "1 hour")
+        let action2 = NSUserNotificationAction(identifier: "2h", title: "2 hours")
         actions.append(action1)
         actions.append(action2)
-        actions.append(action3)
-        // WARNING, private API
-        notification.setValue(true, forKey: "_alwaysShowAlternateActionMenu")
+        notification.setValue(true, forKey: "_alwaysShowAlternateActionMenu") // WARNING, private API
         notification.additionalActions = actions
-
-
-
-        print("Time to wait for next notification:", TimeInterval(exactly: timeIntervalSinceNow)!)
-
-        // More optional notification settings
-
-        // Identifier: DANGEROUS, the notification didn't work
-        // notification.identifier = "Emotion Pop-up notification"
-
-        // Informative text
-        // notification.informativeText = "And remember to push the button on your smartband!"
 
         // Actual notification scheduling
         notificationCenter.scheduleNotification(notification)
-    }
+        notificationSet.insert(notification)
 
-    // MARK: Export collected data to csv
-    func exportToCsv(destinationPath: URL) {
-
-        // csv string to be saved
-        let csv = csv_string()
-
-        do {
-            try csv.write(to: destinationPath, atomically: true, encoding: String.Encoding.utf8)
-        } catch {
-            print("Something went wrong trying to save the file.")
-            // Possible problems: failed to write file – bad permissions, bad filename, missing permissions, or more likely it can't be converted to the encoding
-        }
+        // Debug prints
+        print("Time to wait for next notification:", TimeInterval(exactly: timeIntervalSinceNow)!)
+        print("NotificationID: " + (notification.identifier ?? "noID"))
 
     }
 
-    // TODO: refactoring needed
-    func csv_string() -> String {
+    func manageNotification(notification: NSUserNotification) {
 
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "dd/MM/yyyy-HH:mm:ss"
-        dateFormatter.locale = .current
+        if notification.title == "How are you feeling?" {
 
-        var csv = ""
+            if let choosen = notification.additionalActivationAction, let actionIdentifier = choosen.identifier {
 
-        let emotionLogFetch = NSFetchRequest<NSFetchRequestResult>(entityName: "EmotionalState")
-        do {
-            let fetchedEmotionLogs = try context!.fetch(emotionLogFetch) as! [EmotionalState]
-            for emotionLog in fetchedEmotionLogs {
+                // If the notification is postponed...
+                switch actionIdentifier {
+                case "1h":
+                    scheduleNotification(minutesSinceNow: 10)
+//                    scheduleNotification(minutesSinceNow: 60*60)
+                    print("Notification postponed. It will display 1 hour from now!")
+                case "2h":
+                    scheduleNotification(minutesSinceNow: 15)
+//                    scheduleNotification(minutesSinceNow: 120*60)
+                    print("Notification postponed. It will display 2 hours from now!")
+                default:
+                    print("Something went wrong: UserNotification additionalActivationAction not recognized")
+                }
 
-                csv.append(dateFormatter.string(from: emotionLog.timestamp! as Date))
-                csv.append(";")
-                csv.append(emotionLog.activity ?? "nil")
-                csv.append(";")
-                csv.append(emotionLog.valence?.stringValue ?? "nil")
-                csv.append(";")
-                csv.append(emotionLog.arousal?.stringValue ?? "nil")
-                csv.append("\n")
-
+            } else {
+                // Show EmotionPopUp and remove the notification
+                emotionPopUpController.showEmotionPopUp(self)
+                notificationCenter.removeDeliveredNotification(notification)
             }
-        } catch {
-            fatalError("Failed to fetch EmotionLogs: \(error)")
+        
         }
-
-        return csv
     }
 
 }
