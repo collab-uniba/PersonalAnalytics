@@ -10,7 +10,7 @@ import Foundation
 import CoreData
 
 struct Questionnaire {
-    var timestamp: NSDate
+    var timestamp: Date
     var activity: String
     var valence: NSNumber
     var arousal: NSNumber
@@ -21,7 +21,7 @@ class EmotionTracker: ITracker {
     // MARK: Properties
     let emotionPopUpController = EmotionPopUpWindowController(windowNibName: NSNib.Name(rawValue: "EmotionPopUp"))
     let notificationCenter = NSUserNotificationCenter.default
-    var notificationSet = Set<NSUserNotification>()
+    let dataController = DataObjectController.sharedInstance
 
     // Properties for protocol conformity
     var name: String = "EmotionTracker"
@@ -32,8 +32,7 @@ class EmotionTracker: ITracker {
     init() {
         
         // Set default time interval between notificaitons
-        var minutes = 60 // Should be 60 by default
-        minutes *= 60 // Should be 60
+        let minutes = 60 * 60
         UserDefaults.standard.set(minutes, forKey: "timeInterval")
 
         // Start the tracker
@@ -49,15 +48,29 @@ class EmotionTracker: ITracker {
     }
 
     func stop() {
-        // Cancel scheduled notification
-        for notification in notificationSet {
-            notificationCenter.removeScheduledNotification(notification)
+        // Cancel scheduled notifications
+        for notification in notificationCenter.scheduledNotifications {
+            if notification.identifier == AppConstants.emotionTrackerNotificationID {
+                notificationCenter.removeScheduledNotification(notification)
+            }
         }
         isRunning = false
     }
 
+
+    func createDatabaseTablesIfNotExist() {
+
+        let dbController = DatabaseController.getDatabaseController()
+
+        do{
+            try dbController.executeUpdate(query: "CREATE TABLE IF NOT EXISTS EmotionalState (id INTEGER PRIMARY KEY, timestamp TEXT, activity TEXT, valence INTEGER, arousal INTEGER)");
+        }
+        catch{
+            print(error)
+        }
+    }
+
     // Not yet implemented
-    func createDatabaseTablesIfNotExist() {}
     func updateDatabaseTables(version: Int) {}
 
 
@@ -67,7 +80,7 @@ class EmotionTracker: ITracker {
         let notification = NSUserNotification()
 
         // Notification properties
-        notification.identifier = String(NSDate().timeIntervalSince1970)
+        notification.identifier = AppConstants.emotionTrackerNotificationID
         notification.title = "How are you feeling?"
         notification.subtitle = "Click here to open the pop-up!"
         notification.soundName = NSUserNotificationDefaultSoundName
@@ -88,7 +101,6 @@ class EmotionTracker: ITracker {
 
         // Actual notification scheduling
         notificationCenter.scheduleNotification(notification)
-        notificationSet.insert(notification)
 
         // Debug prints
         print("Time to wait for next notification:", TimeInterval(exactly: timeIntervalSinceNow)!)
@@ -98,31 +110,30 @@ class EmotionTracker: ITracker {
 
     func manageNotification(notification: NSUserNotification) {
 
-        if notification.title == "How are you feeling?" {
+        if let choosen = notification.additionalActivationAction, let actionIdentifier = choosen.identifier {
 
-            if let choosen = notification.additionalActivationAction, let actionIdentifier = choosen.identifier {
-
-                // If the notification is postponed...
-                switch actionIdentifier {
-                case "1h":
-                    scheduleNotification(minutesSinceNow: 10)
-//                    scheduleNotification(minutesSinceNow: 60*60)
-                    print("Notification postponed. It will display 1 hour from now!")
-                case "2h":
-                    scheduleNotification(minutesSinceNow: 15)
-//                    scheduleNotification(minutesSinceNow: 120*60)
-                    print("Notification postponed. It will display 2 hours from now!")
-                default:
-                    print("Something went wrong: UserNotification additionalActivationAction not recognized")
-                }
-
-            } else {
-                // Show EmotionPopUp and remove the notification
-                emotionPopUpController.showEmotionPopUp(self)
-                notificationCenter.removeDeliveredNotification(notification)
+            // If the notification is postponed...
+            switch actionIdentifier {
+            case "1h":
+                scheduleNotification(minutesSinceNow: 60*60)
+                print("Notification postponed. It will display 1 hour from now!")
+            case "2h":
+                scheduleNotification(minutesSinceNow: 120*60)
+                print("Notification postponed. It will display 2 hours from now!")
+            default:
+                print("Something went wrong: UserNotification additionalActivationAction not recognized")
             }
-        
+
+        } else {
+            // Show EmotionPopUp and remove the notification
+            emotionPopUpController.showEmotionPopUp(self)
+            notificationCenter.removeDeliveredNotification(notification)
         }
+        
+    }
+
+    func save(questionnaire: Questionnaire){
+        dataController.saveEmotionalState(questionnaire: questionnaire)
     }
 
 }

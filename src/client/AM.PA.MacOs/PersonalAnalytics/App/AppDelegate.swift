@@ -187,11 +187,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSUserNotificationCenterDele
         // It doesn't seem to work if I change the selector, so I'm leaving it for now (working is better for now than slowing down)
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(delegate.quit), keyEquivalent: "q"))
 
-        // TODO: delete the following lines before merging to the 'mac' branch
-        menu.addItem(NSMenuItem.separator())
-        let emotionPopUpItem = NSMenuItem(title: "Emotion Pop-up", action: #selector(delegate.showEmotionPopUp), keyEquivalent: "E")
-        menu.addItem(emotionPopUpItem)
-
         // Setting up the summary popup
         statusItem.image = NSImage(named: NSImage.Name(rawValue: "StatusBarButtonImage"))
         setUpSummaryView()
@@ -200,13 +195,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSUserNotificationCenterDele
     
     }
 
-    // TODO: delete the following lines before merging to the 'mac' branch
-    // WHY DOES THIS WORK???
-    @objc func showEmotionPopUp() {
-        let emotionTracker = (TrackerManager.shared.getTracker(tracker: "EmotionTracker") as! EmotionTracker)
-        emotionTracker.emotionPopUpController.showEmotionPopUp(self)
-    }
-    
     @objc func togglePause(){
         if(isPaused){
             TrackerManager.shared.resume()
@@ -292,15 +280,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSUserNotificationCenterDele
 
     
     func userNotificationCenter(_ center: NSUserNotificationCenter, didActivate notification: NSUserNotification) {
-            //print("Using delelgate for NSUsernotification")
-            //self.toggleSummary(notification.self)
 
+        switch notification.identifier {
+        case AppConstants.emotionTrackerNotificationID:
             (TrackerManager.shared.getTracker(tracker: "EmotionTracker") as! EmotionTracker).manageNotification(notification: notification)
+        default:
+            //print("Using delelgate for NSUsernotification")
+            self.toggleSummary(notification.self)
+        }
+
     }
 
-    func userNotificationCenter(_ center: NSUserNotificationCenter, shouldPresent notification: NSUserNotification) -> Bool {
-        return true
-    }
 
     //https://stackoverflow.com/questions/7271528/how-to-nslog-into-a-file
     func redirectLogToDocuments() {
