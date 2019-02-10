@@ -32,7 +32,7 @@ class EmotionTracker: ITracker {
     init() {
         
         // Set default time interval between notificaitons
-        let minutes = 60 * 60 // Default value = 60 * 60 (60 seconds * 60 = 1h)
+        let minutes = 10 // Default value = 60 * 60 (60 seconds * 60 = 1h)
         UserDefaults.standard.set(minutes, forKey: "timeInterval")
 
         // Start the tracker
@@ -48,12 +48,7 @@ class EmotionTracker: ITracker {
     }
 
     func stop() {
-        // Cancel scheduled notifications
-        for notification in notificationCenter.scheduledNotifications {
-            if notification.identifier == AppConstants.emotionTrackerNotificationID {
-                notificationCenter.removeScheduledNotification(notification)
-            }
-        }
+        unscheduleNotifications()
         isRunning = false
     }
 
@@ -99,6 +94,9 @@ class EmotionTracker: ITracker {
         notification.setValue(true, forKey: "_alwaysShowAlternateActionMenu") // WARNING, private API
         notification.additionalActions = actions
 
+        // Unschedule previous scheduled notificaitons
+        unscheduleNotifications()
+
         // Actual notification scheduling
         notificationCenter.scheduleNotification(notification)
 
@@ -106,6 +104,15 @@ class EmotionTracker: ITracker {
         print("Time to wait for next notification:", TimeInterval(exactly: timeIntervalSinceNow)!)
         print("NotificationID: " + (notification.identifier ?? "noID"))
 
+    }
+
+    func unscheduleNotifications() {
+        // Unschedule every EmotionTracker notification
+        for notification in notificationCenter.scheduledNotifications {
+            if notification.identifier == AppConstants.emotionTrackerNotificationID {
+                notificationCenter.removeScheduledNotification(notification)
+            }
+        }
     }
 
     func manageNotification(notification: NSUserNotification) {

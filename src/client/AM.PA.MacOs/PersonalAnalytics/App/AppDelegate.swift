@@ -187,12 +187,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSUserNotificationCenterDele
         // It doesn't seem to work if I change the selector, so I'm leaving it for now (working is better for now than slowing down)
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(delegate.quit), keyEquivalent: "q"))
 
+        // TODO: delete the following lines before merging to the 'mac' branch
+        menu.addItem(NSMenuItem.separator())
+        let emotionPopUpItem = NSMenuItem(title: "Emotion Pop-up", action: #selector(delegate.showEmotionPopUp), keyEquivalent: "E")
+        menu.addItem(emotionPopUpItem)
+
         // Setting up the summary popup
         statusItem.image = NSImage(named: NSImage.Name(rawValue: "StatusBarButtonImage"))
         setUpSummaryView()
         setUpPreferencesView()
         setUpRetrospective()
     
+    }
+
+    // TODO: delete the following lines before merging to the 'mac' branch
+    @objc func showEmotionPopUp() {
+        let emotionTracker = (TrackerManager.shared.getTracker(tracker: "EmotionTracker") as! EmotionTracker)
+        emotionTracker.emotionPopUpController.showEmotionPopUp(self)
     }
 
     @objc func togglePause(){
@@ -368,6 +379,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSUserNotificationCenterDele
         // This cannot be set to defer above because it will ask for connection, but before you can click
         // it will see the server is not connected and close it.
         api!.stopServer()
+
+        let emotionTracker = (TrackerManager.shared.getTracker(tracker: "EmotionTracker") as! EmotionTracker)
+        emotionTracker.unscheduleNotifications()
     }
 
     
