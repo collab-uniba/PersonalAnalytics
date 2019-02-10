@@ -136,5 +136,17 @@ class EmotionPopUpWindowController: NSWindowController {
         let oneMonthAgo = Date() - (30*24*60*60)
         DataObjectController.sharedInstance.exportStudyData(startTime: oneMonthAgo.timeIntervalSince1970)
 
+        exportFunctionFeedback()
+
     }
+
+    func exportFunctionFeedback() {
+        let alert = NSAlert()
+        alert.messageText = "Success!"
+        alert.informativeText = "Data is saved in your home directory :)"
+        alert.alertStyle = NSAlert.Style.informational
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+
 }
