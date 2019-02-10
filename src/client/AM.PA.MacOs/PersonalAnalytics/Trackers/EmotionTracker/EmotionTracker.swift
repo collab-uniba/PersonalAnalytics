@@ -132,8 +132,16 @@ class EmotionTracker: ITracker {
             }
 
         } else {
+
             // Show EmotionPopUp and remove the notification
             emotionPopUpController.showEmotionPopUp(self)
+
+            // Save current timestamp
+            let timestamp = Date()
+            let activity = "POPUP_OPENED"
+            let questionnaire = Questionnaire(timestamp: timestamp, activity: activity, valence: 0, arousal: 0)
+            save(questionnaire: questionnaire)
+
             notificationCenter.removeDeliveredNotification(notification)
         }
         

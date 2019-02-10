@@ -47,7 +47,6 @@ class EmotionPopUpWindowController: NSWindowController {
         DataObjectController.sharedInstance.saveContext()
         self.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
-
         self.window?.makeKeyAndOrderFront(self)
     }
 
