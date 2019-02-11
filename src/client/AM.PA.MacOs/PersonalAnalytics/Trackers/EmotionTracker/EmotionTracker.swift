@@ -32,7 +32,7 @@ class EmotionTracker: ITracker {
     init() {
         
         // Set default time interval between notificaitons
-        let minutes = 10 // Default value = 60 * 60 (60 seconds * 60 = 1h)
+        let minutes = 60 * 60 // Default value = 60 * 60 (60 seconds * 60 = 1h)
         UserDefaults.standard.set(minutes, forKey: "timeInterval")
 
         // Start the tracker
