@@ -302,6 +302,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSUserNotificationCenterDele
 
     }
 
+    func userNotificationCenter(_ center: NSUserNotificationCenter, shouldPresent notification: NSUserNotification) -> Bool {
+        return true
+    }
+
 
     //https://stackoverflow.com/questions/7271528/how-to-nslog-into-a-file
     func redirectLogToDocuments() {
