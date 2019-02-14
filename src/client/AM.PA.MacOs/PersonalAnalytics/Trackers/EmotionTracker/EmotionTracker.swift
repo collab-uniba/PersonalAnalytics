@@ -14,6 +14,7 @@ struct Questionnaire {
     var activity: String
     var valence: NSNumber
     var arousal: NSNumber
+    var notes: String
 }
 
 class EmotionTracker: ITracker {
@@ -139,7 +140,7 @@ class EmotionTracker: ITracker {
             // Save current timestamp
             let timestamp = Date()
             let activity = "POPUP_OPENED"
-            let questionnaire = Questionnaire(timestamp: timestamp, activity: activity, valence: 0, arousal: 0)
+            let questionnaire = Questionnaire(timestamp: timestamp, activity: activity, valence: 0, arousal: 0, notes: "")
             save(questionnaire: questionnaire)
 
             notificationCenter.removeDeliveredNotification(notification)

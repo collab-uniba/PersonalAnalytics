@@ -37,6 +37,7 @@ class SQLController{
         var activity: String
         var valence: Int
         var arousal: Int
+        var notes: String
     }
     
     func fetchActiveApplicationsSince(time: Double) -> [ActiveApplicationEntry] {
@@ -102,8 +103,16 @@ class SQLController{
                 let activity: String = row["ZACTIVITY"]
                 let valence: Int = row["ZVALENCE"]
                 let arousal: Int = row["ZAROUSAL"]
+                let notes: String
+                if row["ZNOTES"] != nil {
+                    notes = row["ZNOTES"]
+                } else {
+                    notes = ""
+                }
 
-                results.append(EmotionalStateEntry(timestamp: timestamp, activity: activity, valence: valence, arousal: arousal))
+
+
+                results.append(EmotionalStateEntry(timestamp: timestamp, activity: activity, valence: valence, arousal: arousal, notes: notes))
             }
 
         } catch {

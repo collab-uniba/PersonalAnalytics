@@ -22,6 +22,7 @@ class EmotionPopUpWindowController: NSWindowController {
     @IBOutlet weak var activityValidationLabel: NSTextField!
     @IBOutlet weak var valenceValidationLabel: NSTextField!
     @IBOutlet weak var arousalValidationLabel: NSTextField!
+    @IBOutlet weak var notesTextField: NSTextField!
 
     // Other variables
     var firstTimeClick: Bool = true
@@ -35,6 +36,7 @@ class EmotionPopUpWindowController: NSWindowController {
         self.arousal?.state = NSControl.StateValue.off
         self.arousal = nil
         self.activityPopupButton.selectItem(at: -1)
+        self.notesTextField.stringValue = ""
 
         // Reset validation labels
         self.activityValidationLabel.isHidden = true
@@ -85,8 +87,9 @@ class EmotionPopUpWindowController: NSWindowController {
             let activity = activityValue
             let valence = NSNumber(value: Int16(valenceValue)!)
             let arousal = NSNumber(value: Int16(arousalValue)!)
+            let notes = notesTextField.stringValue
 
-            let questionnaire = Questionnaire(timestamp: timestamp, activity: activity, valence: valence, arousal: arousal)
+            let questionnaire = Questionnaire(timestamp: timestamp, activity: activity, valence: valence, arousal: arousal, notes: notes)
 
             // Save questionnaire data
             emotionTracker.save(questionnaire: questionnaire)

@@ -20,5 +20,6 @@ extension EmotionalState {
     @NSManaged public var arousal: NSNumber?
     @NSManaged public var valence: NSNumber?
     @NSManaged public var date: NSNumber?
+    @NSManaged public var notes: String?
 
 }

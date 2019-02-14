@@ -225,6 +225,7 @@ class DataObjectController: NSObject{
                 emotionalState.setValue(questionnaire.activity, forKey: "activity")
                 emotionalState.setValue(questionnaire.valence, forKey: "valence")
                 emotionalState.setValue(questionnaire.arousal, forKey: "arousal")
+                emotionalState.setValue(questionnaire.notes, forKey: "notes")
             } else {
                 print("It was impossible to save the last emotional state.")
             }
@@ -334,14 +335,15 @@ class DataObjectController: NSObject{
         dateFormatter.dateFormat =  "yyyy-MM-dd HH:mm:ss"
         dateFormatter.locale = .current
 
-        var result = "Timestamp,Activity,Valence,Arousal\n"
+        var result = "Timestamp,Activity,Valence,Arousal,Notes\n"
 
 
         for row in input {
             result += String(row.timestamp) + ","
             result += String(row.activity) + ","
             result += String(row.valence) + ","
-            result += String(row.arousal) + "\n"
+            result += String(row.arousal) + ","
+            result += "\"" + String(row.notes) + "\"\n"
         }
         return result
     }
